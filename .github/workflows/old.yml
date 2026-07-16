@@ -1,4 +1,4 @@
-name: Android Kernel Driver Builder (OLD)
+name: Android Kernel Driver Builder (Fixed)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
         description: 'Kernel Version (e.g., 6.1)'
         required: true
       driver_name:
-        description: 'Driver Module Name (e.g., mydriver.ko)'
+        description: 'Driver Module Name (e.g., yunwu.ko)'
         required: true
       target_arch:
         description: 'Target Architecture (aarch64, x86_64, etc.)'
@@ -41,82 +41,88 @@ jobs:
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android${{ github.event.inputs.android_version }}-${{ github.event.inputs.kernel_version }}
           repo sync -j$(nproc) -c --no-tags --optimized-fetch --force-sync
 
-      - name: Copy kerneldriver
-        run: |
-          cd android-kernel
-          cp -r ../kerneldriver common/drivers
-
-      - name: Modify Makefile
-        run: |
-          cd android-kernel
-          echo "obj-y += kerneldriver/" >> common/drivers/Makefile
-
-      - name: Add module to GKI modules list
-        if: ${{ github.event.inputs.android_version > 13 }}
-        run: |
-          cd android-kernel
-          MODULE_NAME="drivers/kerneldriver/${{ github.event.inputs.driver_name }}"
-          
-          awk -i inplace -v module="$MODULE_NAME" '
-            BEGIN { added=0 }
-            /_COMMON_GKI_MODULES_LIST = \[/ { in_list=1 }
-            in_list && /\]/ {
-              if (!added) {
-                print "    \"" module "\","
-                added=1
-              }
-              in_list=0
-            }
-            in_list && !added {
-              if (module < $0) {
-                print "    \"" module "\","
-                added=1
-              }
-            }
-            { print }
-          ' common/modules.bzl
-          
-      - name: Prepare module list for legacy builds
-        if: ${{ github.event.inputs.android_version <= 13 }}
-        run: |
-          cd android-kernel
-          echo "drivers/kerneldriver/${{ github.event.inputs.driver_name }}" >> common/android/gki_${{ github.event.inputs.target_arch }}_modules
-      - name: Increase stack frame size limit
-        run: |
-          cd android-kernel
-          find . -type f -name "Makefile*" -exec sed -i 's/-Wframe-larger-than=[0-9]*/-Wframe-larger-than=4096/g' {} +
-          grep -q "FRAME_WARN" common/Makefile || echo 'KBUILD_CFLAGS += -Wframe-larger-than=4096' >> common/Makefile
-
-      - name: Install dependencies
+      - name: Install dependencies & cross-compiler
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc python-is-python3
-      - name: Fix missing kprobe symbols for Android 13
-        if: ${{ github.event.inputs.android_version == 13 }}
-        run: |
-          cd android-kernel
-          for symbol in register_kprobe unregister_kprobe; do
-            grep -q "$symbol" common/android/abi_gki_${{ github.event.inputs.target_arch }} || \
-            echo "$symbol" >> common/android/abi_gki_${{ github.event.inputs.target_arch }}
-          done
-          sed -i '/EXPORT_SYMBOL(unregister_kprobe);/a EXPORT_SYMBOL(register_kprobe);' common/kernel/kprobes.c
-          
-      - name: Build kernel module
-        run: |
-          cd android-kernel
-          if [ ${{ github.event.inputs.android_version }} -le 13 ]; then
-            BUILD_CONFIG=common/build.config.gki.${{ github.event.inputs.target_arch }} LTO=thin build/build.sh -j32
-            OUTPUT_PATH="out/android${{ github.event.inputs.android_version }}-${{ github.event.inputs.kernel_version }}/dist"
-          else
-            echo "Using Bazel build system for Android ${{ github.event.inputs.android_version }}"
-            tools/bazel run //common:kernel_${{ github.event.inputs.target_arch }}_dist
-            OUTPUT_PATH="out/kernel_${{ github.event.inputs.target_arch }}"
+          # 安装交叉编译工具链
+          if [ "${{ github.event.inputs.target_arch }}" = "aarch64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          elif [ "${{ github.event.inputs.target_arch }}" = "x86_64" ]; then
+            sudo apt-get install -y gcc-x86-64-linux-gnu
           fi
-          echo "OUTPUT_PATH=$OUTPUT_PATH" >> $GITHUB_ENV
-      
+
+      - name: Build kernel (Android 13 and below)
+        if: ${{ github.event.inputs.android_version <= 13 }}
+        run: |
+          cd android-kernel
+          BUILD_CONFIG=common/build.config.gki.${{ github.event.inputs.target_arch }} LTO=thin build/build.sh -j32
+          # 内核构建输出目录通常在 out/ 下，找到 dist 目录
+          KERNEL_OUT=$(find out -name "dist" -type d | head -1)
+          echo "KERNEL_OUT=$KERNEL_OUT" >> $GITHUB_ENV
+
+      - name: Build kernel (Android 14+ with Bazel)
+        if: ${{ github.event.inputs.android_version > 13 }}
+        run: |
+          cd android-kernel
+          # 构建内核，启用 sandbox_debug 以便看到具体错误
+          tools/bazel build --sandbox_debug //common:kernel_${{ github.event.inputs.target_arch }}_dist 2>&1 | tee bazel_build.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "Bazel build failed, showing log tail:"
+            tail -50 bazel_build.log
+            exit 1
+          fi
+          # 找到 Bazel 生成的 tar.gz 产物并解压，作为内核构建输出目录
+          ARTIFACT=$(find bazel-out -name "kernel_*.tar.gz" | head -1)
+          if [ -z "$ARTIFACT" ]; then
+            echo "Could not find kernel dist tarball"
+            exit 1
+          fi
+          mkdir -p /tmp/kernel_dist
+          tar -xzf "$ARTIFACT" -C /tmp/kernel_dist
+          KERNEL_OUT="/tmp/kernel_dist"
+          echo "KERNEL_OUT=$KERNEL_OUT" >> $GITHUB_ENV
+
+      - name: Build external kernel module
+        run: |
+          cd android-kernel
+          # 确认内核输出目录存在
+          if [ ! -d "$KERNEL_OUT" ]; then
+            echo "KERNEL_OUT directory not found: $KERNEL_OUT"
+            exit 1
+          fi
+          # 设置架构和交叉编译器
+          if [ "${{ github.event.inputs.target_arch }}" = "aarch64" ]; then
+            export ARCH=arm64
+            export CROSS_COMPILE=aarch64-linux-gnu-
+          elif [ "${{ github.event.inputs.target_arch }}" = "x86_64" ]; then
+            export ARCH=x86_64
+            export CROSS_COMPILE=x86_64-linux-gnu-
+          fi
+          
+          # 将驱动源码复制出来（避免污染内核源码树）
+          mkdir -p /tmp/module_build
+          cp -r ../kerneldriver/* /tmp/module_build/
+          
+          # 使用外部模块方式编译
+          make -C $KERNEL_OUT M=/tmp/module_build modules 2>&1 | tee module_build.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "Module build failed, showing log tail:"
+            tail -30 module_build.log
+            exit 1
+          fi
+          
+          # 查找生成的 .ko 文件
+          MODULE_FILE=$(find /tmp/module_build -name "*.ko" | head -1)
+          if [ ! -f "$MODULE_FILE" ]; then
+            echo "Module .ko not found!"
+            exit 1
+          fi
+          cp "$MODULE_FILE" /tmp/
+          echo "MODULE_FILE=/tmp/$(basename "$MODULE_FILE")" >> $GITHUB_ENV
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4.6.2
         with:
           name: kernel-driver-${{ github.event.inputs.target_arch }}
-          path: |
-            android-kernel/${{ env.OUTPUT_PATH }}
+          path: ${{ env.MODULE_FILE }}
