@@ -1,8 +1,9 @@
 obj-m := yunwu.o
-KDIR := /lib/modules/$(shell uname -r)/build
-PWD := $(shell pwd)
+KDIR := $(KERNEL_SRC)
+PWD  := $(shell pwd)
 
 all:
-	make -C $(KDIR) M=$(PWD) modules
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
+
 clean:
-	make -C $(KDIR) M=$(PWD) clean
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
