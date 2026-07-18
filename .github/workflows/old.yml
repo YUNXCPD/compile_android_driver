@@ -1,124 +1,67 @@
-name: Android Kernel Driver Builder (OLD)
+name: Build and Upload Kernel Modules
 
 on:
   workflow_dispatch:
     inputs:
-      android_version:
-        description: 'Android Version (Kernel) (e.g., 14)'
-        required: true
-      kernel_version:
-        description: 'Kernel Version (e.g., 6.1)'
-        required: true
-      driver_name:
-        description: 'Driver Module Name (e.g., mydriver.ko)'
-        required: true
       target_arch:
-        description: 'Target Architecture (aarch64, x86_64, etc.)'
+        description: 'Target architecture (e.g., arm64, x86_64)'
         required: true
-        default: 'aarch64'
+        type: string
+      kernel_version:
+        description: 'Kernel version to build against'
+        required: false
+        type: string
+        default: '5.15'
+
+env:
+  OUTPUT_PATH: out            # 构建输出目录（相对于 android-kernel 目录）
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
+      # 1. 检出代码
       - name: Checkout repository
-        uses: actions/checkout@v4.2.2
-        
-      - name: Prepare kerneldriver directory
-        run: |
-          mkdir kerneldriver
-          mv ./code/*.h ./code/*.c ./code/Makefile kerneldriver/
-          
-      - name: Install repo tool
-        run: |
-          sudo curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
-          sudo chmod a+x /usr/local/bin/repo
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
-      - name: Set up Android Kernel source
-        run: |
-          mkdir -p android-kernel && cd android-kernel
-          repo init -u https://android.googlesource.com/kernel/manifest -b common-android${{ github.event.inputs.android_version }}-${{ github.event.inputs.kernel_version }}
-          repo sync -j$(nproc) -c --no-tags --optimized-fetch --force-sync
-
-      - name: Copy kerneldriver
-        run: |
-          cd android-kernel
-          cp -r ../kerneldriver common/drivers
-
-      - name: Modify Makefile
-        run: |
-          cd android-kernel
-          echo "obj-y += kerneldriver/" >> common/drivers/Makefile
-
-      - name: Add module to GKI modules list
-        if: ${{ github.event.inputs.android_version > 13 }}
-        run: |
-          cd android-kernel
-          MODULE_NAME="drivers/kerneldriver/${{ github.event.inputs.driver_name }}"
-          
-          awk -i inplace -v module="$MODULE_NAME" '
-            BEGIN { added=0 }
-            /_COMMON_GKI_MODULES_LIST = \[/ { in_list=1 }
-            in_list && /\]/ {
-              if (!added) {
-                print "    \"" module "\","
-                added=1
-              }
-              in_list=0
-            }
-            in_list && !added {
-              if (module < $0) {
-                print "    \"" module "\","
-                added=1
-              }
-            }
-            { print }
-          ' common/modules.bzl
-          
-      - name: Prepare module list for legacy builds
-        if: ${{ github.event.inputs.android_version <= 13 }}
-        run: |
-          cd android-kernel
-          echo "drivers/kerneldriver/${{ github.event.inputs.driver_name }}" >> common/android/gki_${{ github.event.inputs.target_arch }}_modules
-      - name: Increase stack frame size limit
-        run: |
-          cd android-kernel
-          find . -type f -name "Makefile*" -exec sed -i 's/-Wframe-larger-than=[0-9]*/-Wframe-larger-than=4096/g' {} +
-          grep -q "FRAME_WARN" common/Makefile || echo 'KBUILD_CFLAGS += -Wframe-larger-than=4096' >> common/Makefile
-
-      - name: Install dependencies
+      # 2. 设置构建环境（示例：安装依赖）
+      - name: Setup build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc python-is-python3
-      - name: Fix missing kprobe symbols for Android 13
-        if: ${{ github.event.inputs.android_version == 13 }}
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            build-essential \
+            flex bison \
+            libssl-dev \
+            bc \
+            cpio \
+            git
+
+      # 3. 构建内核模块（此处为示例构建命令，请根据实际项目调整）
+      - name: Build kernel modules
         run: |
           cd android-kernel
-          for symbol in register_kprobe unregister_kprobe; do
-            grep -q "$symbol" common/android/abi_gki_${{ github.event.inputs.target_arch }} || \
-            echo "$symbol" >> common/android/abi_gki_${{ github.event.inputs.target_arch }}
-          done
-          sed -i '/EXPORT_SYMBOL(unregister_kprobe);/a EXPORT_SYMBOL(register_kprobe);' common/kernel/kprobes.c
-          
-      - name: Build kernel module
+          export ARCH=${{ github.event.inputs.target_arch }}
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          # 假设构建配置和模块编译指令
+          make defconfig
+          make modules_prepare
+          make M=drivers/sample modules  # 示例路径，请修改为实际模块路径
+          mkdir -p ${{ env.OUTPUT_PATH }}
+          find . -name "*.ko" -exec cp --parents {} ${{ env.OUTPUT_PATH }}/ \;
+
+      # 4. 列出所有找到的 .ko 文件（方便日志查看）
+      - name: List ko files
         run: |
-          cd android-kernel
-          if [ ${{ github.event.inputs.android_version }} -le 13 ]; then
-            BUILD_CONFIG=common/build.config.gki.${{ github.event.inputs.target_arch }} LTO=thin build/build.sh -j32
-            OUTPUT_PATH="out/android${{ github.event.inputs.android_version }}-${{ github.event.inputs.kernel_version }}/dist"
-          else
-            echo "Using Bazel build system for Android ${{ github.event.inputs.android_version }}"
-            tools/bazel run //common:kernel_${{ github.event.inputs.target_arch }}_dist
-            OUTPUT_PATH="out/kernel_${{ github.event.inputs.target_arch }}"
-          fi
-          echo "OUTPUT_PATH=$OUTPUT_PATH" >> $GITHUB_ENV
-        continue-on-error: true
-      
-      - name: Upload artifacts
+          echo "Searching for .ko files in android-kernel/${{ env.OUTPUT_PATH }}"
+          find android-kernel/${{ env.OUTPUT_PATH }} -name "*.ko" -print
+
+      # 5. 上传所有 .ko 文件作为 artifact（仅上传 ko，不打包）
+      - name: Upload ko files
         uses: actions/upload-artifact@v4.6.2
         with:
           name: kernel-driver-${{ github.event.inputs.target_arch }}
-          path: |
-            android-kernel/${{ env.OUTPUT_PATH }}
-
+          path: android-kernel/${{ env.OUTPUT_PATH }}/**/*.ko
