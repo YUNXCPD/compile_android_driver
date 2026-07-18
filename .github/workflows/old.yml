@@ -119,4 +119,5 @@ jobs:
         uses: actions/upload-artifact@v4.6.2
         with:
           name: kernel-driver-${{ github.event.inputs.target_arch }}
-          path: android-kernel/${{ env.OUTPUT_PATH }}/**/*.ko
+          path: |
+            android-kernel/${{ env.OUTPUT_PATH }}
