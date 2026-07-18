@@ -115,9 +115,15 @@ jobs:
           echo "OUTPUT_PATH=$OUTPUT_PATH" >> $GITHUB_ENV
         continue-on-error: true
       
+      - name: Pack key artifacts
+        run: |
+          cd android-kernel/${{ env.OUTPUT_PATH }}
+          find . -name "*.ko" -o -name "Module.symvers" | tar czf /tmp/kernel_artifacts.tar.gz -T -
+          echo "Packed files:"
+          tar tzf /tmp/kernel_artifacts.tar.gz
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4.6.2
         with:
           name: kernel-driver-${{ github.event.inputs.target_arch }}
-          path: |
-            android-kernel/${{ env.OUTPUT_PATH }}
+          path: /tmp/kernel_artifacts.tar.gz
