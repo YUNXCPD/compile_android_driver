@@ -1,7 +1,12 @@
-obj-m := yunwu.o
-KDIR := /lib/modules/$(shell uname -r)/build
-PWD := $(shell pwd)
+# 外部内核模块标准 Makefile
+# 用法: make KDIR=/path/to/kernel/source
+
+KDIR ?= $(PWD)/kernel_source
+
+obj-m += yunwu.o
+
 all:
-	make -C $(KDIR) M=$(PWD) modules
+	$(MAKE) -C $(KDIR) ARCH=arm64 LLVM=1 M=$(PWD) modules
+
 clean:
-	make -C $(KDIR) M=$(PWD) clean
+	$(MAKE) -C $(KDIR) ARCH=arm64 LLVM=1 M=$(PWD) clean
