@@ -1,10 +1,10 @@
-name: Build All Kernel Driver Modules
+name: Build All Kernel Driver Modules (Fixed)
 
 on:
   workflow_dispatch:
     inputs:
       driver_name:
-        description: 'Driver file name (e.g. yunwu.ko)'
+        description: 'Driver .ko filename (e.g. yunwu.ko)'
         required: true
         default: 'yunwu.ko'
       target_arch:
@@ -24,323 +24,257 @@ jobs:
           # ===== Android 17 =====
           - label: "6.18.21-android17-202506"
             android_ver: "17"
-            kernel_ver: "6.18"
-            branch: "android17-6.18-2026-06"
+            tag: "android17-6.18-2026-06_r1"
             localversion: "-android17-0"
 
           # ===== Android 16 =====
           - label: "6.12.23-android16-202506"
             android_ver: "16"
-            kernel_ver: "6.12"
-            branch: "android16-6.12-2025-06"
+            tag: "android16-6.12-2025-06_r1"
             localversion: "-android16-0"
           - label: "6.12.30-android16-202507"
             android_ver: "16"
-            kernel_ver: "6.12"
-            branch: "android16-6.12-2025-07"
+            tag: "android16-6.12-2025-07_r1"
             localversion: "-android16-0"
           - label: "6.12.38-android16-202508"
             android_ver: "16"
-            kernel_ver: "6.12"
-            branch: "android16-6.12-2025-08"
+            tag: "android16-6.12-2025-08_r1"
             localversion: "-android16-0"
           - label: "6.12.38-android16-202509"
             android_ver: "16"
-            kernel_ver: "6.12"
-            branch: "android16-6.12-2025-09"
+            tag: "android16-6.12-2025-09_r1"
             localversion: "-android16-0"
           - label: "6.12.58-android16-202512"
             android_ver: "16"
-            kernel_ver: "6.12"
-            branch: "android16-6.12-2025-12"
+            tag: "android16-6.12-2025-12_r1"
             localversion: "-android16-0"
           - label: "6.12.69-android16-202603"
             android_ver: "16"
-            kernel_ver: "6.12"
-            branch: "android16-6.12-2026-03"
+            tag: "android16-6.12-2026-03_r1"
             localversion: "-android16-0"
 
           # ===== Android 15 (6.6) =====
           - label: "6.6.30-android15-202407"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2024-07"
+            tag: "android15-6.6-2024-07_r1"
             localversion: "-android15-0"
           - label: "6.6.30-android15-202408"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2024-08"
+            tag: "android15-6.6-2024-08_r1"
             localversion: "-android15-0"
           - label: "6.6.46-android15-202409"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2024-09"
+            tag: "android15-6.6-2024-09_r1"
             localversion: "-android15-0"
           - label: "6.6.50-android15-202410"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2024-10"
+            tag: "android15-6.6-2024-10_r1"
             localversion: "-android15-0"
           - label: "6.6.56-android15-202411"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2024-11"
+            tag: "android15-6.6-2024-11_r1"
             localversion: "-android15-0"
           - label: "6.6.57-android15-202412"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2024-12"
+            tag: "android15-6.6-2024-12_r1"
             localversion: "-android15-0"
           - label: "6.6.58-android15-202501"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-01"
+            tag: "android15-6.6-2025-01_r1"
             localversion: "-android15-0"
           - label: "6.6.66-android15-202502"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-02"
+            tag: "android15-6.6-2025-02_r1"
             localversion: "-android15-0"
           - label: "6.6.77-android15-202503"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-03"
+            tag: "android15-6.6-2025-03_r1"
             localversion: "-android15-0"
           - label: "6.6.82-android15-202504"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-04"
+            tag: "android15-6.6-2025-04_r1"
             localversion: "-android15-0"
           - label: "6.6.87-android15-202505"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-05"
+            tag: "android15-6.6-2025-05_r1"
             localversion: "-android15-0"
           - label: "6.6.89-android15-202506"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-06"
+            tag: "android15-6.6-2025-06_r1"
             localversion: "-android15-0"
           - label: "6.6.92-android15-202507"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-07"
+            tag: "android15-6.6-2025-07_r1"
             localversion: "-android15-0"
           - label: "6.6.98-android15-202508"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-08"
+            tag: "android15-6.6-2025-08_r1"
             localversion: "-android15-0"
           - label: "6.6.98-android15-202509"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-09"
+            tag: "android15-6.6-2025-09_r1"
             localversion: "-android15-0"
           - label: "6.6.102-android15-202510"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2025-10"
+            tag: "android15-6.6-2025-10_r1"
             localversion: "-android15-0"
           - label: "6.6.118-android15-202601"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2026-01"
+            tag: "android15-6.6-2026-01_r1"
             localversion: "-android15-0"
           - label: "6.6.127-android15-202604"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2026-04"
+            tag: "android15-6.6-2026-04_r1"
             localversion: "-android15-0"
           - label: "6.6.139-android15-202607"
             android_ver: "15"
-            kernel_ver: "6.6"
-            branch: "android15-6.6-2026-07"
+            tag: "android15-6.6-2026-07_r1"
             localversion: "-android15-0"
 
           # ===== Android 14 (6.1) =====
           - label: "6.1.25-android14-202307"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2023-07"
+            tag: "android14-6.1-2023-07_r1"
             localversion: "-android14-0"
           - label: "6.1.57-android14-202312"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2023-12"
+            tag: "android14-6.1-2023-12_r1"
             localversion: "-android14-0"
           - label: "6.1.78-android14-202406"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2024-06"
+            tag: "android14-6.1-2024-06_r1"
             localversion: "-android14-0"
           - label: "6.1.115-android14-202412"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2024-12"
+            tag: "android14-6.1-2024-12_r1"
             localversion: "-android14-0"
           - label: "6.1.138-android14-202506"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2025-06"
+            tag: "android14-6.1-2025-06_r1"
             localversion: "-android14-0"
           - label: "6.1.141-android14-202507"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2025-07"
+            tag: "android14-6.1-2025-07_r1"
             localversion: "-android14-0"
           - label: "6.1.145-android14-202508"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2025-08"
+            tag: "android14-6.1-2025-08_r1"
             localversion: "-android14-0"
           - label: "6.1.145-android14-202509"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2025-09"
+            tag: "android14-6.1-2025-09_r1"
             localversion: "-android14-0"
           - label: "6.1.157-android14-202512"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2025-12"
+            tag: "android14-6.1-2025-12_r1"
             localversion: "-android14-0"
           - label: "6.1.162-android14-202603"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2026-03"
+            tag: "android14-6.1-2026-03_r1"
             localversion: "-android14-0"
           - label: "6.1.172-android14-202606"
             android_ver: "14"
-            kernel_ver: "6.1"
-            branch: "android14-6.1-2026-06"
+            tag: "android14-6.1-2026-06_r1"
             localversion: "-android14-0"
 
           # ===== Android 14 (5.15) =====
           - label: "5.15.110-android14-202308"
             android_ver: "14"
-            kernel_ver: "5.15"
-            branch: "android14-5.15-2023-08"
+            tag: "android14-5.15-2023-08_r1"
             localversion: "-android14-0"
           - label: "5.15.110-android14-202309"
             android_ver: "14"
-            kernel_ver: "5.15"
-            branch: "android14-5.15-2023-09"
+            tag: "android14-5.15-2023-09_r1"
             localversion: "-android14-0"
           - label: "5.15.185-android14-202507"
             android_ver: "14"
-            kernel_ver: "5.15"
-            branch: "android14-5.15-2025-07"
+            tag: "android14-5.15-2025-07_r1"
             localversion: "-android14-0"
           - label: "5.15.192-android14-202510"
             android_ver: "14"
-            kernel_ver: "5.15"
-            branch: "android14-5.15-2025-10"
+            tag: "android14-5.15-2025-10_r1"
             localversion: "-android14-0"
           - label: "5.15.196-android14-202601"
             android_ver: "14"
-            kernel_ver: "5.15"
-            branch: "android14-5.15-2026-01"
+            tag: "android14-5.15-2026-01_r1"
             localversion: "-android14-0"
           - label: "5.15.202-android14-202604"
             android_ver: "14"
-            kernel_ver: "5.15"
-            branch: "android14-5.15-2026-04"
+            tag: "android14-5.15-2026-04_r1"
             localversion: "-android14-0"
           - label: "5.15.208-android14-202607"
             android_ver: "14"
-            kernel_ver: "5.15"
-            branch: "android14-5.15-2026-07"
+            tag: "android14-5.15-2026-07_r1"
             localversion: "-android14-0"
 
           # ===== Android 13 (5.15) =====
           - label: "5.15.41-android13-202208"
             android_ver: "13"
-            kernel_ver: "5.15"
-            branch: "android13-5.15-2022-08"
+            tag: "android13-5.15-2022-08_r1"
             localversion: "-android13-0"
           - label: "5.15.185-android13-202507"
             android_ver: "13"
-            kernel_ver: "5.15"
-            branch: "android13-5.15-2025-07"
+            tag: "android13-5.15-2025-07_r1"
             localversion: "-android13-0"
           - label: "5.15.189-android13-202509"
             android_ver: "13"
-            kernel_ver: "5.15"
-            branch: "android13-5.15-2025-09"
+            tag: "android13-5.15-2025-09_r1"
             localversion: "-android13-0"
           - label: "5.15.194-android13-202512"
             android_ver: "13"
-            kernel_ver: "5.15"
-            branch: "android13-5.15-2025-12"
+            tag: "android13-5.15-2025-12_r1"
             localversion: "-android13-0"
           - label: "5.15.197-android13-202603"
             android_ver: "13"
-            kernel_ver: "5.15"
-            branch: "android13-5.15-2026-03"
+            tag: "android13-5.15-2026-03_r1"
             localversion: "-android13-0"
           - label: "5.15.206-android13-202606"
             android_ver: "13"
-            kernel_ver: "5.15"
-            branch: "android13-5.15-2026-06"
+            tag: "android13-5.15-2026-06_r1"
             localversion: "-android13-0"
 
           # ===== Android 13 (5.10) =====
           - label: "5.10.107-android13-202208"
             android_ver: "13"
-            kernel_ver: "5.10"
-            branch: "android13-5.10-2022-08"
+            tag: "android13-5.10-2022-08_r1"
             localversion: "-android13-0"
           - label: "5.10.238-android13-202507"
             android_ver: "13"
-            kernel_ver: "5.10"
-            branch: "android13-5.10-2025-07"
+            tag: "android13-5.10-2025-07_r1"
             localversion: "-android13-0"
           - label: "5.10.243-android13-202510"
             android_ver: "13"
-            kernel_ver: "5.10"
-            branch: "android13-5.10-2025-10"
+            tag: "android13-5.10-2025-10_r1"
             localversion: "-android13-0"
           - label: "5.10.246-android13-202601"
             android_ver: "13"
-            kernel_ver: "5.10"
-            branch: "android13-5.10-2026-01"
+            tag: "android13-5.10-2026-01_r1"
             localversion: "-android13-0"
           - label: "5.10.252-android13-202604"
             android_ver: "13"
-            kernel_ver: "5.10"
-            branch: "android13-5.10-2026-04"
+            tag: "android13-5.10-2026-04_r1"
             localversion: "-android13-0"
-          # 未发布分支，如需可取消注释
-          # - label: "5.10.257-android13-202607"
-          #   android_ver: "13"
-          #   kernel_ver: "5.10"
-          #   branch: "android13-5.10-2026-07"
-          #   localversion: "-android13-0"
 
           # ===== Android 12 (5.10) =====
           - label: "5.10.66-android12-202111"
             android_ver: "12"
-            kernel_ver: "5.10"
-            branch: "android12-5.10-2021-11"
+            tag: "android12-5.10-2021-11_r1"
             localversion: "-android12-0"
           - label: "5.10.237-android12-202506"
             android_ver: "12"
-            kernel_ver: "5.10"
-            branch: "android12-5.10-2025-06"
+            tag: "android12-5.10-2025-06_r1"
             localversion: "-android12-0"
           - label: "5.10.240-android12-202509"
             android_ver: "12"
-            kernel_ver: "5.10"
-            branch: "android12-5.10-2025-09"
+            tag: "android12-5.10-2025-09_r1"
             localversion: "-android12-0"
           - label: "5.10.246-android12-202512"
             android_ver: "12"
-            kernel_ver: "5.10"
-            branch: "android12-5.10-2025-12"
+            tag: "android12-5.10-2025-12_r1"
             localversion: "-android12-0"
           - label: "5.10.252-android12-202604"
             android_ver: "12"
-            kernel_ver: "5.10"
-            branch: "android12-5.10-2026-04"
+            tag: "android12-5.10-2026-04_r1"
             localversion: "-android12-0"
 
     steps:
@@ -352,12 +286,18 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc python3 git
+          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc python3 git \
+                                  gcc-aarch64-linux-gnu zip
 
-      - name: Clone kernel source (shallow)
+      - name: Clone kernel source via tag (fallback to branch)
         run: |
-          git clone --depth=1 --branch ${{ matrix.branch }} \
-            https://android.googlesource.com/kernel/common kernel
+          # 先尝试 tag，再尝试分支，避免分支名就是 tag 导致的失败
+          git init kernel
+          cd kernel
+          git remote add origin https://android.googlesource.com/kernel/common
+          git fetch --depth 1 origin "refs/tags/${{ matrix.tag }}:refs/tags/${{ matrix.tag }}" 2>/dev/null || \
+          git fetch --depth 1 origin "refs/heads/${{ matrix.tag }}:refs/heads/${{ matrix.tag }}"
+          git checkout FETCH_HEAD
         working-directory: ${{ runner.temp }}
 
       - name: Apply Android 13 kprobe fixes
@@ -365,15 +305,15 @@ jobs:
         run: |
           cd ${{ runner.temp }}/kernel
           for symbol in register_kprobe unregister_kprobe; do
-            grep -q "$symbol" common/android/abi_gki_aarch64 || \
+            grep -q "$symbol" common/android/abi_gki_aarch64 2>/dev/null || \
             echo "$symbol" >> common/android/abi_gki_aarch64
           done
-          sed -i '/EXPORT_SYMBOL(unregister_kprobe);/a EXPORT_SYMBOL(register_kprobe);' kernel/kprobes.c
+          sed -i '/EXPORT_SYMBOL(unregister_kprobe);/a EXPORT_SYMBOL(register_kprobe);' kernel/kprobes.c 2>/dev/null || true
 
       - name: Increase stack frame warning limit
         run: |
           cd ${{ runner.temp }}/kernel
-          find . -type f -name "Makefile*" -exec sed -i 's/-Wframe-larger-than=[0-9]*/-Wframe-larger-than=4096/g' {} +
+          sed -i 's/-Wframe-larger-than=[0-9]*/-Wframe-larger-than=4096/g' Makefile
 
       - name: Prepare kernel config and modules
         run: |
@@ -381,15 +321,12 @@ jobs:
           make ARCH=arm64 gki_defconfig
           echo "CONFIG_LOCALVERSION=\"${{ matrix.localversion }}\"" >> .config
           make ARCH=arm64 olddefconfig
-          make ARCH=arm64 modules_prepare -j$(nproc)
-        env:
-          CROSS_COMPILE: aarch64-linux-gnu-
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare -j$(nproc)
 
       - name: Build driver module
         run: |
-          cp -r ${{ github.workspace }}/driver/code/*.c ${{ github.workspace }}/driver/code/*.h ${{ github.workspace }}/driver/code/Makefile /tmp/driver-src/
           mkdir -p /tmp/driver-src
-          cp ${{ github.workspace }}/driver/code/* /tmp/driver-src/
+          cp -r ${{ github.workspace }}/driver/code/* /tmp/driver-src/
           cd ${{ runner.temp }}/kernel
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=/tmp/driver-src modules -j$(nproc)
 
@@ -397,7 +334,7 @@ jobs:
         run: |
           mkdir -p artifacts
           cp /tmp/driver-src/${{ github.event.inputs.driver_name }} artifacts/${{ matrix.label }}.ko
-          7z a -tzip artifacts-${{ matrix.label }}.zip artifacts/
+          cd artifacts && zip -r ../artifacts-${{ matrix.label }}.zip .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
