@@ -30,27 +30,54 @@ jobs:
           mkdir kerneldriver
           mv ./code/*.h ./code/*.c ./code/Makefile kerneldriver/
           
-      # ============================================
-      # 修改点 1：改用 git clone 从 CodeLinaro 拉取内核源码
-      # ============================================
       - name: Set up Android Kernel source
         run: |
           mkdir -p android-kernel && cd android-kernel
           
-          # CodeLinaro 标签格式：android12-5.10-2024-05_r6
-          # 如 r6 不存在，可改为 r7
+          # ==========================================
+          # 1. 拉取内核源码（CodeLinaro）
+          # ==========================================
           KERNEL_TAG="android${{ github.event.inputs.android_version }}-${{ github.event.inputs.kernel_version }}_r6"
           echo ">>> Using CodeLinaro tag: $KERNEL_TAG"
           
-          # 拉取内核源码（放到 common/ 目录，保持与原 workflow 路径兼容）
           git clone --depth=1 -b "$KERNEL_TAG" \
-            https://git.codelinaro.org/clo/la/kernel/common.git common
+            https://git.codelinaro.org/clo/la/kernel/common.git common || {
+              echo ">>> r6 failed, trying r7..."
+              KERNEL_TAG="android${{ github.event.inputs.android_version }}-${{ github.event.inputs.kernel_version }}_r7"
+              git clone --depth=1 -b "$KERNEL_TAG" \
+                https://git.codelinaro.org/clo/la/kernel/common.git common
+            }
           
-          # 拉取构建脚本（Google 的 kernel/build 通常仍可访问）
-          git clone --depth=1 \
-            https://android.googlesource.com/kernel/build build
+          # ==========================================
+          # 2. 拉取构建脚本（build/）
+          # ==========================================
+          echo ">>> Cloning kernel/build..."
+          git clone --depth=1 https://android.googlesource.com/kernel/build build || {
+            echo ">>> Google source failed, trying GitHub mirror..."
+            git clone --depth=1 https://github.com/aosp-mirror/kernel_build build || {
+              echo ">>> Trying another mirror..."
+              git clone --depth=1 https://gitlab.com/aosp-mirror/kernel_build build
+            }
+          }
+          
+          # ==========================================
+          # 3. 拉取预编译工具链（prebuilts/）
+          # ==========================================
+          echo ">>> Cloning prebuilts..."
+          git clone --depth=1 https://android.googlesource.com/kernel/prebuilts prebuilts || {
+            git clone --depth=1 https://github.com/aosp-mirror/kernel_prebuilts prebuilts || true
+          }
+          
+          # ==========================================
+          # 4. 调试：确认目录结构
+          # ==========================================
+          echo ">>> Directory structure:"
+          ls -la
+          echo ">>> build/ contents:"
+          ls -la build/ 2>/dev/null || echo "build/ MISSING!"
+          echo ">>> common/ contents:"
+          ls -la common/ 2>/dev/null || echo "common/ MISSING!"
 
-      # 以下步骤保持原逻辑不变，common/ 路径无需修改
       - name: Copy kerneldriver
         run: |
           cd android-kernel
@@ -61,32 +88,7 @@ jobs:
           cd android-kernel
           echo "obj-y += kerneldriver/" >> common/drivers/Makefile
 
-      - name: Add module to GKI modules list
-        if: ${{ github.event.inputs.android_version > 13 }}
-        run: |
-          cd android-kernel
-          MODULE_NAME="drivers/kerneldriver/${{ github.event.inputs.driver_name }}"
-          awk -i inplace -v module="$MODULE_NAME" '
-            BEGIN { added=0 }
-            /_COMMON_GKI_MODULES_LIST = \[/ { in_list=1 }
-            in_list && /\]/ {
-              if (!added) {
-                print "    \"" module "\","
-                added=1
-              }
-              in_list=0
-            }
-            in_list && !added {
-              if (module < $0) {
-                print "    \"" module "\","
-                added=1
-              }
-            }
-            { print }
-          ' common/modules.bzl
-          
       - name: Prepare module list for legacy builds
-        if: ${{ github.event.inputs.android_version <= 13 }}
         run: |
           cd android-kernel
           echo "drivers/kerneldriver/${{ github.event.inputs.driver_name }}" >> common/android/gki_${{ github.event.inputs.target_arch }}_modules
@@ -100,7 +102,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc python-is-python3
+          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc python-is-python3 ccache lzop cpio bzip2 zip
 
       - name: Fix missing kprobe symbols for Android 13
         if: ${{ github.event.inputs.android_version == 13 }}
@@ -115,6 +117,15 @@ jobs:
       - name: Build kernel module
         run: |
           cd android-kernel
+          
+          # 确认 build.sh 存在
+          if [ ! -f build/build.sh ]; then
+            echo "ERROR: build/build.sh not found!"
+            echo "Available files in build/:"
+            ls -la build/ 2>/dev/null || echo "build/ directory does not exist"
+            exit 1
+          fi
+          
           if [ ${{ github.event.inputs.android_version }} -le 13 ]; then
             BUILD_CONFIG=common/build.config.gki.${{ github.event.inputs.target_arch }} LTO=thin build/build.sh -j32
             OUTPUT_PATH="out/android${{ github.event.inputs.android_version }}-${{ github.event.inputs.kernel_version }}/dist"
