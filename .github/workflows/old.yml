@@ -1,0 +1,390 @@
+name: Android Kernel Driver Builder (Full Series + All Months)
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: '编译目标：all=所有分支所有月份；all-head=所有分支最新；6.12-*=6.12 全月份；6.12-2025-08=单月份；android14-5.15=单分支'
+        required: true
+        default: '6.12-2025-08'
+      target_arch:
+        description: '目标架构（aarch64 / x86_64）'
+        required: true
+        default: 'aarch64'
+      driver_name:
+        description: '驱动模块名；auto=从 Makefile 自动识别'
+        required: false
+        default: 'auto'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.parse.outputs.matrix }}
+    steps:
+      - name: Parse targets
+        id: parse
+        env:
+          TARGETS: ${{ github.event.inputs.targets }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess, sys
+
+          SERIES = {
+              "5.4":  ["android12-5.4"],
+              "5.10": ["android12-5.10", "android13-5.10"],
+              "5.15": ["android13-5.15", "android14-5.15"],
+              "6.1":  ["android14-6.1"],
+              "6.6":  ["android15-6.6"],
+              "6.12": ["android16-6.12"],
+              "6.18": ["android17-6.18"],
+          }
+          ALL = [b for v in SERIES.values() for b in v]
+
+          raw = os.environ.get("TARGETS", "").strip()
+          toks = [t.strip() for t in re.split(r"[,\s]+", raw) if t.strip()]
+
+          expand_all_months = False
+          if len(toks) == 1 and toks[0].lower() == "all":
+              toks = list(ALL)
+              expand_all_months = True
+          elif len(toks) == 1 and toks[0].lower() == "all-head":
+              toks = list(ALL)
+          elif len(toks) == 1 and toks[0].lower() == "all-months":
+              toks = list(ALL)
+              expand_all_months = True
+
+          heads = None
+          try:
+              r = subprocess.run(
+                  ["git", "ls-remote", "--heads",
+                   "https://android.googlesource.com/kernel/manifest"],
+                  capture_output=True, text=True, timeout=300)
+              if r.returncode == 0:
+                  heads = set()
+                  for line in r.stdout.splitlines():
+                      if "\t" in line:
+                          ref = line.split("\t", 1)[1].strip()
+                          if ref.startswith("refs/heads/"):
+                              heads.add(ref[len("refs/heads/"):])
+          except Exception:
+              heads = None
+
+          def months_for(b):
+              pref = "common-" + b + "-"
+              out = []
+              if heads:
+                  for h in heads:
+                      if h.startswith(pref):
+                          m = h[len(pref):]
+                          if re.fullmatch(r"\d{4}-\d{2}", m):
+                              out.append(m)
+              return sorted(out)
+
+          entries = []
+          for tok in toks:
+              if not re.fullmatch(r"[A-Za-z0-9.\-*]+", tok):
+                  print("::error::非法字符: " + tok); sys.exit(1)
+              m = re.fullmatch(r"^(?:(?:android)?(\d+)-)?(\d+\.\d+)(?:-(\d{4}-\d{2}|\*|all))?$", tok)
+              if not m:
+                  print("::error::无法识别目标: " + tok); sys.exit(1)
+              a_fixed, kver, month = m.group(1), m.group(2), m.group(3) or ""
+              if a_fixed:
+                  branches = ["android" + a_fixed + "-" + kver]
+              elif kver in SERIES:
+                  branches = list(SERIES[kver])
+              else:
+                  print("::error::未知内核系列: " + kver); sys.exit(1)
+
+              if expand_all_months or month in ("*", "all"):
+                  if heads is None:
+                      print("::error::无法获取 manifest 月份列表，请稍后重试"); sys.exit(1)
+                  for b in branches:
+                      ms = months_for(b)
+                      if not ms:
+                          print("::warning::" + b + " 没有独立发布月份，已跳过")
+                          continue
+                      for mo in ms:
+                          entries.append({
+                              "label": b + "-" + mo,
+                              "android": b.split("-", 1)[0].replace("android", ""),
+                              "kver": kver,
+                              "branch": "common-" + b,
+                              "release": mo,
+                              "pin": b + "-" + mo,
+                          })
+              else:
+                  for b in branches:
+                      android = b.split("-", 1)[0].replace("android", "")
+                      pin = (b + "-" + month) if month else ""
+                      entries.append({
+                          "label": b + (("-" + month) if month else ""),
+                          "android": android,
+                          "kver": kver,
+                          "branch": "common-" + b,
+                          "release": month,
+                          "pin": pin,
+                      })
+
+          seen = set()
+          uniq = []
+          for e in entries:
+              key = e["branch"] + "|" + e["release"]
+              if key not in seen:
+                  seen.add(key)
+                  uniq.append(e)
+
+          matrix = []
+          for e in uniq:
+              if heads is not None and e["branch"] not in heads:
+                  print("::warning::manifest 分支不存在，已跳过: " + e["branch"])
+                  continue
+              matrix.append(e)
+
+          if not matrix:
+              print("::error::没有有效目标"); sys.exit(1)
+
+          payload = json.dumps(matrix, separators=(",", ":"))
+          print("resolved " + str(len(matrix)) + " target(s)")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("matrix=" + payload + "\n")
+          PY
+
+  build:
+    needs: prepare
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Free disk space
+        run: |
+          set -x
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet /usr/local/lib/android /usr/local/share/boost \
+            /opt/ghc /opt/hostedtoolcache /usr/local/share/vcpkg /usr/local/.ghcup \
+            /usr/lib/jvm /usr/share/swift /usr/local/go /usr/local/graalvm \
+            /usr/local/share/powershell /usr/share/miniconda /usr/share/az_* \
+            /usr/share/gradle* /usr/share/sbt /usr/share/kotlin /opt/az /opt/microsoft \
+            2>/dev/null || true
+          sudo apt-get clean
+          sudo docker system prune -af --volumes 2>/dev/null || true
+          sudo swapoff -a 2>/dev/null || true
+          sudo rm -f /swapfile /mnt/swapfile 2>/dev/null || true
+          df -h /
+
+      - name: Prepare kerneldriver directory
+        run: |
+          if [ ! -d code ]; then echo "::error::code/ 目录不存在"; exit 1; fi
+          mkdir -p kerneldriver
+          find ./code -maxdepth 1 \( -name "*.h" -o -name "*.c" -o -name "Makefile" \) -exec cp {} kerneldriver/ \;
+          ls -la kerneldriver/
+
+      - name: Detect driver module name
+        id: detect
+        env:
+          DRIVER_INPUT: ${{ github.event.inputs.driver_name }}
+        run: |
+          MODULE=""
+          if [ -n "${DRIVER_INPUT}" ] && [ "${DRIVER_INPUT}" != "auto" ]; then
+            MODULE="${DRIVER_INPUT}"
+          elif [ -f kerneldriver/Makefile ]; then
+            MODULE=$(grep -E '^obj-[my]\s*[:+]?=' kerneldriver/Makefile | head -n1 | awk '{print $3}' | sed 's/\.o$/.ko/')
+          fi
+          if [ -z "${MODULE}" ]; then echo "::error::无法识别模块名"; exit 1; fi
+          case "$MODULE" in *.ko) ;; *) MODULE="${MODULE}.ko" ;; esac
+          echo "module_name=${MODULE}" >> "$GITHUB_OUTPUT"
+          echo "module: ${MODULE}"
+
+      - name: Install repo tool
+        run: |
+          curl -sSL https://storage.googleapis.com/git-repo-downloads/repo -o /tmp/repo
+          test -s /tmp/repo || { echo "::error::repo 下载失败"; exit 1; }
+          sudo install -m 0755 /tmp/repo /usr/local/bin/repo
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison bc libssl-dev libelf-dev python-is-python3 zip unzip rsync
+
+      - name: Set up Android Kernel source
+        id: source
+        env:
+          BASE_BRANCH: ${{ matrix.branch }}
+          RELEASE: ${{ matrix.release }}
+        run: |
+          BRANCH="${BASE_BRANCH}"
+          FALLBACK=0
+          if [ -n "${RELEASE}" ]; then
+            MB="${BASE_BRANCH}-${RELEASE}"
+            if git ls-remote --exit-code https://android.googlesource.com/kernel/manifest "refs/heads/${MB}" >/dev/null 2>&1; then
+              BRANCH="${MB}"
+            else
+              FALLBACK=1
+            fi
+          fi
+          echo "fallback=${FALLBACK}" >> "$GITHUB_OUTPUT"
+          mkdir -p android-kernel && cd android-kernel
+          repo init -u https://android.googlesource.com/kernel/manifest -b "${BRANCH}"
+          repo sync -j$(nproc) -c --no-tags --optimized-fetch --force-sync
+          df -h /
+
+      - name: Pin kernel source (fallback respin tag)
+        if: ${{ matrix.pin != '' && steps.source.outputs.fallback == '1' }}
+        env:
+          PIN: ${{ matrix.pin }}
+        run: |
+          cd android-kernel/common
+          TAG=$(git ls-remote --tags --refs origin "refs/tags/${PIN}_r*" | awk '{print $2}' | sed 's|refs/tags/||' | sort -V | tail -n1)
+          OK=0
+          if [ -n "$TAG" ]; then
+            git fetch --depth=1 origin "refs/tags/${TAG}" && OK=1
+          fi
+          if [ "$OK" -eq 0 ]; then
+            for ref in "refs/heads/${PIN}" "refs/heads/common-${PIN}" "refs/heads/deprecated/${PIN}"; do
+              if git fetch --depth=1 origin "$ref"; then OK=1; break; fi
+            done
+          fi
+          if [ "$OK" -eq 0 ]; then echo "::error::发布线不存在: ${PIN}"; exit 1; fi
+          git checkout -q FETCH_HEAD
+          grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) =' Makefile || true
+
+      - name: Copy kerneldriver
+        run: |
+          cd android-kernel
+          rm -rf common/drivers/kerneldriver
+          cp -r ../kerneldriver common/drivers
+
+      - name: Modify Makefile
+        run: |
+          cd android-kernel
+          grep -q 'kerneldriver/' common/drivers/Makefile || echo "obj-y += kerneldriver/" >> common/drivers/Makefile
+
+      - name: Add module to GKI module list
+        env:
+          MODULE_NAME: ${{ steps.detect.outputs.module_name }}
+        run: |
+          cd android-kernel
+          MODULE_PATH="drivers/kerneldriver/${MODULE_NAME}"
+          if [ -f common/modules.bzl ]; then
+            if grep -q "$MODULE_PATH" common/modules.bzl; then
+              echo "modules.bzl: already present"
+            elif grep -q '_COMMON_GKI_MODULES_LIST = \[' common/modules.bzl; then
+              sed -i "/_COMMON_GKI_MODULES_LIST = \[/a\\    \"$MODULE_PATH\"," common/modules.bzl
+            elif grep -q '_COMMON_GKI_MODULES = \[' common/modules.bzl; then
+              sed -i "/_COMMON_GKI_MODULES = \[/a\\    \"$MODULE_PATH\"," common/modules.bzl
+            else
+              echo "::warning::modules.bzl 结构未知，跳过"
+            fi
+          fi
+          LEGACY_LIST="common/android/gki_aarch64_modules"
+          if [ -f "$LEGACY_LIST" ]; then
+            grep -q "$MODULE_PATH" "$LEGACY_LIST" || echo "$MODULE_PATH" >> "$LEGACY_LIST"
+          fi
+
+      - name: Adjust compiler flags
+        run: |
+          cd android-kernel
+          grep -q 'KBUILD_CFLAGS += -Wframe-larger-than' common/Makefile || \
+            echo 'KBUILD_CFLAGS += -Wframe-larger-than=4096' >> common/Makefile
+          grep -q 'Wno-error=unused-function' common/Makefile || \
+            echo 'KBUILD_CFLAGS += -Wno-error=unused-function' >> common/Makefile
+          grep -q 'Wno-error=declaration-after-statement' common/Makefile || \
+            echo 'KBUILD_CFLAGS += -Wno-error=declaration-after-statement' >> common/Makefile
+
+      - name: Fix missing kprobe symbols (Android 12/13/14)
+        if: matrix.android == '12' || matrix.android == '13' || matrix.android == '14'
+        run: |
+          cd android-kernel
+          ABI="common/android/abi_gki_aarch64"
+          [ -f "$ABI" ] || ABI="common/android/abi_gki_aarch64.stg"
+          for s in register_kprobe unregister_kprobe; do
+            if [ -f "$ABI" ] && ! grep -q "^\s*$s\s*$" "$ABI"; then
+              echo "$s" >> "$ABI"
+            fi
+          done
+          KP=""
+          for f in common/kernel/kprobes.c common/kernel/kprobes_blacklist.c; do
+            if [ -f "$f" ] && grep -q 'EXPORT_SYMBOL.*unregister_kprobe' "$f"; then KP="$f"; break; fi
+          done
+          if [ -n "$KP" ] && ! grep -q 'EXPORT_SYMBOL.*(register_kprobe)' "$KP"; then
+            sed -i '/EXPORT_SYMBOL.*(unregister_kprobe);/a EXPORT_SYMBOL(register_kprobe);' "$KP"
+          fi
+
+      - name: Build kernel module
+        env:
+          ARCH: ${{ github.event.inputs.target_arch }}
+          ANDROID: ${{ matrix.android }}
+          KV: ${{ matrix.kver }}
+        run: |
+          set -x
+          DIST_DIR="$GITHUB_WORKSPACE/upload_artifact"
+          mkdir -p "$DIST_DIR"
+          cd android-kernel
+
+          export KCFLAGS="-Wframe-larger-than=4096 -Wno-error=unused-function -Wno-error=declaration-after-statement"
+
+          if [ "$ANDROID" -le 13 ]; then
+            BUILD_CONFIG=common/build.config.gki.${ARCH} LTO=thin build/build.sh -j$(nproc)
+            echo "OUTPUT_PATH=out/android${ANDROID}-${KV}/dist" >> "$GITHUB_ENV"
+          elif [ -f tools/bazel ] && [ -f common/modules.bzl ]; then
+            case "$ANDROID-$KV" in
+              14-6.1|13-*|12-*|11-*) BAZEL_ARCH=arm64 ;;
+              *)                     BAZEL_ARCH=aarch64 ;;
+            esac
+            tools/bazel run "//common:kernel_${BAZEL_ARCH}_dist" -- --dist_dir="$DIST_DIR"
+            echo "OUTPUT_PATH=$DIST_DIR" >> "$GITHUB_ENV"
+          else
+            BUILD_CONFIG=common/build.config.gki.${ARCH} LTO=thin build/build.sh -j$(nproc)
+            echo "OUTPUT_PATH=out/android${ANDROID}-${KV}/dist" >> "$GITHUB_ENV"
+          fi
+          echo "DIST_DIR=$DIST_DIR" >> "$GITHUB_ENV"
+          df -h /
+
+      - name: Stage artifacts
+        env:
+          MODULE_NAME: ${{ steps.detect.outputs.module_name }}
+        run: |
+          set -x
+          mkdir -p upload_artifact
+          FOUND=""
+          if [ -n "${DIST_DIR:-}" ] && [ -d "${DIST_DIR:-}" ]; then
+            FOUND=$(find "$DIST_DIR" -name "$MODULE_NAME" -type f | head -n1)
+          fi
+          if [ -z "$FOUND" ] && [ -n "${OUTPUT_PATH:-}" ] && [ -d "${OUTPUT_PATH:-}" ]; then
+            FOUND=$(find "$OUTPUT_PATH" -name "$MODULE_NAME" -type f | head -n1)
+          fi
+          if [ -z "$FOUND" ] && [ -d android-kernel/out ]; then
+            FOUND=$(find android-kernel/out -path '*/dist/*' -name "$MODULE_NAME" -type f 2>/dev/null | head -n1)
+            [ -z "$FOUND" ] && FOUND=$(find android-kernel/out -name "$MODULE_NAME" -type f 2>/dev/null | head -n1)
+          fi
+          if [ -z "$FOUND" ]; then
+            for d in bazel-bin bazel-out android-kernel/bazel-bin android-kernel/bazel-out; do
+              [ -d "$d" ] || continue
+              FOUND=$(find "$d" -name "$MODULE_NAME" -type f 2>/dev/null | head -n1)
+              [ -n "$FOUND" ] && break
+            done
+          fi
+          if [ -z "$FOUND" ]; then
+            echo "::error::$MODULE_NAME 未找到"
+            find android-kernel/out android-kernel/bazel-bin android-kernel/bazel-out -name "*.ko" 2>/dev/null | head -n30 || true
+            exit 1
+          fi
+          if [ "$(readlink -f "$FOUND")" != "$(readlink -f "$GITHUB_WORKSPACE/upload_artifact/$MODULE_NAME")" ]; then
+            cp "$FOUND" upload_artifact/
+          fi
+          ls -lh upload_artifact/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: kernel-driver-${{ matrix.label }}-${{ github.event.inputs.target_arch }}
+          path: upload_artifact/
+          if-no-files-found: error
